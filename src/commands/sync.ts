@@ -58,7 +58,9 @@ function confirmOrAbort(question: string): void {
   }
 }
 
-function shouldPromptForCostConfirmation(options: Pick<SyncCommandOptions, 'confirmCost' | 'yes'>): boolean {
+function shouldPromptForCostConfirmation(
+  options: Pick<SyncCommandOptions, 'confirmCost' | 'yes'>,
+): boolean {
   return options.confirmCost && !options.yes;
 }
 

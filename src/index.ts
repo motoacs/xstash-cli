@@ -13,7 +13,7 @@ import { formatError, logError } from './utils/logger.ts';
 function usage(): string {
   return [
     'Usage:',
-    '  xstash sync [--max-new <n|all>] [--media] [--confirm-cost] [--yes]',
+    '  xstash sync [--max-new <n|all>] [--media] [--confirm-cost|--no-confirm-cost] [--yes]',
     '  xstash export --format <md|csv|json> [--since <date>] [--until <date>] [--include-referenced] [-o <path>]',
     '  xstash config init [--callback-port <port>] [--no-browser] [--client-id <id>] [--client-secret <secret>]',
     '  xstash config show [--client-id <id>] [--client-secret <secret>] [--access-token <token>] [--refresh-token <token>] [--expires-at <iso>]',
@@ -55,7 +55,7 @@ async function run(): Promise<void> {
         boolean: ['media', 'confirm-cost', 'yes'],
         default: {
           media: false,
-          'confirm-cost': false,
+          'confirm-cost': true,
           yes: false,
         },
       });

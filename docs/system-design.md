@@ -57,15 +57,15 @@
 
 ## 4.2 実行前コスト提示
 
-`xstash sync` 実行前にコスト見積を表示する。
+`xstash sync` 実行前にコスト見積を表示し、既定で確認を要求する。
 
 - 表示項目:
   1. 今回取得上限（`max-new`）
   2. 1投稿単価（設定値）
   3. 投稿課金の上限見積（`max-new * unit_price_post_read`）
   4. 補助見積（User Read などの追加取得分）
-- 既定動作: 表示のみ
-- `--confirm-cost` 指定時: 確認プロンプトで続行可否を問う
+- 既定動作: 確認プロンプトで続行可否を問う
+- `--no-confirm-cost` 指定時: 確認を省略して続行
 - `--yes` 指定時: プロンプトを省略
 
 注記: X 側日次重複排除（UTC 24h）は「見積の不確実要素」として常に明示する。
@@ -122,11 +122,12 @@ X Bookmarks API は「実際にブックマークした日時」を返さない�
 
 ## 5.1 sync
 
-`xstash sync [--max-new <n|all>] [--media] [--confirm-cost] [--yes]`
+`xstash sync [--max-new <n|all>] [--media] [--confirm-cost|--no-confirm-cost] [--yes]`
 
 - `--max-new`: 新規 bookmark の最大保存件数
 - `--media`: メディアを保存
-- `--confirm-cost`: 実行前確認を要求
+- `--confirm-cost`: 実行前確認を要求（既定）
+- `--no-confirm-cost`: 実行前確認を省略
 - `--yes`: すべての確認を自動承認
 
 同期完了時サマリ:
