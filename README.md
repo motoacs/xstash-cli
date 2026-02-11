@@ -12,6 +12,81 @@
 - Export formats: `json` (`schema_version=1.1.0`), `md`, `csv`
 - Stats command for bookmark volume, top authors, media breakdown, and estimated cost
 
+## Quick Start
+
+### 1. X API Credentials
+
+Create an app at the X Developer Portal and obtain the following credentials:
+
+- **Client ID** (OAuth 2.0 Client ID)
+- **Client Secret** (Optional: for Confidential Clients)
+
+Required scopes: `bookmark.read`, `tweet.read`, `users.read`, `offline.access`
+
+### 2. Configure
+
+#### Option A: Environment Variables (Recommended)
+
+Create a `.env` file:
+
+```bash
+# Required
+XSTASH_CLIENT_ID=your_client_id_here
+
+# Optional (for Confidential Clients)
+XSTASH_CLIENT_SECRET=your_client_secret_here
+```
+
+Then run OAuth authentication:
+
+```bash
+xstash config init
+```
+
+Your browser will open automatically for X account authorization.
+
+#### Option B: Direct Config File
+
+You can also edit the config file directly:
+
+| OS | Config File Location |
+|---|---|
+| macOS | `~/Library/Application Support/xstash/config.json` |
+| Linux | `~/.config/xstash/config.json` |
+| Windows | `%APPDATA%\xstash\config.json` |
+
+### 3. Sync Bookmarks
+
+```bash
+# Initial sync (latest 200 bookmarks)
+xstash sync
+
+# Sync all bookmarks
+# xstash sync --max-new all
+```
+
+### 4. Export
+
+```bash
+# Export as JSON
+xstash export --format json -o bookmarks.json
+
+# Export as Markdown
+xstash export --format md -o bookmarks.md
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `XSTASH_CLIENT_ID` | Yes | X API OAuth Client ID |
+| `XSTASH_CLIENT_SECRET` | No | OAuth Client Secret (Confidential Client) |
+| `XSTASH_ACCESS_TOKEN` | No | Existing access token |
+| `XSTASH_REFRESH_TOKEN` | No | Existing refresh token |
+| `XSTASH_TOKEN_EXPIRES_AT` | No | Token expiration (ISO 8601) |
+
+**Precedence**: CLI args > Environment Variables > Config File
+
 ## Install / Run
 
 Requires Deno v2.x.
