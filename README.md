@@ -102,6 +102,9 @@ xstash export --format md -o bookmarks.md
 
 # To include local media embeds in Markdown, sync media first
 # xstash sync --media
+
+# JSON export also includes media.local_path for downloaded local files
+# (missing/non-downloaded files are exported as null)
 ```
 
 ## Environment Variables

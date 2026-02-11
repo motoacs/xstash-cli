@@ -100,6 +100,9 @@ xstash export --format md -o bookmarks.md
 
 # Markdownにローカルメディアを埋め込む場合は、先にメディア同期
 # xstash sync --media
+
+# JSONエクスポートでも、ダウンロード済みメディアは media.local_path を出力
+# （未ダウンロード/欠損ファイルは null）
 ```
 
 ## 環境変数
