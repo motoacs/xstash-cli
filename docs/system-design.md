@@ -406,6 +406,9 @@ FROM (
 4. `XSTASH_REFRESH_TOKEN`
 5. `XSTASH_TOKEN_EXPIRES_AT`
 
+CLI 起動時に、カレントディレクトリの `.env` が存在すれば読み込む。
+ただし、すでにプロセス環境変数に設定されているキーは上書きしない。
+
 優先順位: CLI 引数 > 環境変数 > config ファイル
 
 ## 9.3 パス設計

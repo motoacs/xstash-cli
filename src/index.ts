@@ -7,6 +7,7 @@ import {
 import { runExportCommand } from './commands/export.ts';
 import { runStatsCommand } from './commands/stats.ts';
 import { runSyncCommand } from './commands/sync.ts';
+import { loadDotEnvFromFile } from './utils/dotenv.ts';
 import { formatError, logError } from './utils/logger.ts';
 
 function usage(): string {
@@ -32,6 +33,8 @@ function parseAuthOverride(flags: ReturnType<typeof parseArgs>) {
 }
 
 async function run(): Promise<void> {
+  await loadDotEnvFromFile();
+
   const [command, ...rest] = Deno.args;
   if (!command || command === '--help' || command === '-h') {
     console.log(usage());

@@ -23,6 +23,26 @@ X Developer Portalでアプリを作成し、以下を取得してください�
 
 必要スコープ: `bookmark.read`, `tweet.read`, `users.read`, `offline.access`
 
+#### アプリ種別の選択（重要）
+
+X Developer Portalでアプリ作成時は、`xstash-cli`の使い方に応じて選択してください。
+
+- **Native App / Public Client**（通常はこちらを推奨）
+  - ローカルPC上で個人CLIとして使う場合に選択します。
+  - `xstash-cli`はAuthorization Code + PKCEを使うため、Client Secretは必須ではありません。
+- **Web App / Automated App or Bot / Confidential Client**
+  - Client Secretを使って運用したい場合にのみ選択します。
+  - `XSTASH_CLIENT_ID` と `XSTASH_CLIENT_SECRET` の両方を設定してください。
+
+#### Callback URL / Redirect URI
+
+`xstash-cli` はローカルループバックでOAuthコールバックを受け取ります。
+
+- 既定のリダイレクトURI: `http://127.0.0.1:38080/callback`
+- `xstash config init --callback-port <port>` を使う場合: `http://127.0.0.1:<port>/callback`
+
+Xアプリ設定には、実際に使う callback URL を完全一致で登録してください。
+
 ### 2. 設定
 
 #### 方法A: 環境変数（推奨）
@@ -43,17 +63,20 @@ XSTASH_CLIENT_SECRET=your_client_secret_here
 xstash config init
 ```
 
+`xstash` は起動時にカレントディレクトリの `.env` を自動読み込みします。
+シェル側ですでに設定済みの環境変数は上書きされません。
+
 Xアカウント認可のため、ブラウザが自動で開きます。
 
 #### 方法B: 設定ファイルを直接編集
 
 設定ファイルを直接編集することもできます。
 
-| OS | 設定ファイルの場所 |
-|---|---|
-| macOS | `~/Library/Application Support/xstash/config.json` |
-| Linux | `~/.config/xstash/config.json` |
-| Windows | `%APPDATA%\xstash\config.json` |
+| OS      | 設定ファイルの場所                                 |
+| ------- | -------------------------------------------------- |
+| macOS   | `~/Library/Application Support/xstash/config.json` |
+| Linux   | `~/.config/xstash/config.json`                     |
+| Windows | `%APPDATA%\xstash\config.json`                     |
 
 ### 3. ブックマーク同期
 
@@ -77,15 +100,17 @@ xstash export --format md -o bookmarks.md
 
 ## 環境変数
 
-| 変数名 | 必須 | 説明 |
-|----------|----------|-------------|
-| `XSTASH_CLIENT_ID` | Yes | X API OAuth Client ID |
-| `XSTASH_CLIENT_SECRET` | No | OAuth Client Secret（Confidential Client） |
-| `XSTASH_ACCESS_TOKEN` | No | 既存のアクセストークン |
-| `XSTASH_REFRESH_TOKEN` | No | 既存のリフレッシュトークン |
-| `XSTASH_TOKEN_EXPIRES_AT` | No | トークン有効期限（ISO 8601） |
+| 変数名                    | 必須 | 説明                                       |
+| ------------------------- | ---- | ------------------------------------------ |
+| `XSTASH_CLIENT_ID`        | Yes  | X API OAuth Client ID                      |
+| `XSTASH_CLIENT_SECRET`    | No   | OAuth Client Secret（Confidential Client） |
+| `XSTASH_ACCESS_TOKEN`     | No   | 既存のアクセストークン                     |
+| `XSTASH_REFRESH_TOKEN`    | No   | 既存のリフレッシュトークン                 |
+| `XSTASH_TOKEN_EXPIRES_AT` | No   | トークン有効期限（ISO 8601）               |
 
 **優先順位**: CLI引数 > 環境変数 > 設定ファイル
+
+起動時にカレントディレクトリの `.env` を環境変数として読み込みます。
 
 ## インストール / 実行
 
