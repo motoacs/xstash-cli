@@ -133,7 +133,8 @@ Build Linux/macOS/Windows binaries with:
 bash scripts/build-binaries.sh
 ```
 
-Artifacts are generated in `dist/` by default.
+Artifacts are generated in `dist/<platform>/` by default, with binary name `xstash`
+(`xstash.exe` on Windows).
 
 ## Notes
 

@@ -14,23 +14,26 @@ fi
 mkdir -p "$OUT_DIR"
 
 TARGETS=(
-  "x86_64-unknown-linux-gnu"
-  "x86_64-apple-darwin"
-  "aarch64-apple-darwin"
-  "x86_64-pc-windows-msvc"
+  "x86_64-unknown-linux-gnu:linux-x64"
+  "x86_64-apple-darwin:macos-x64"
+  "aarch64-apple-darwin:macos-arm64"
+  "x86_64-pc-windows-msvc:windows-x64"
 )
 
 echo "Building single-file binaries into: $OUT_DIR"
 echo "Entrypoint: $ENTRYPOINT"
 
-for target in "${TARGETS[@]}"; do
+for entry in "${TARGETS[@]}"; do
+  target="${entry%%:*}"
+  platform_dir="${entry##*:}"
   ext=""
   if [[ "$target" == *windows* ]]; then
     ext=".exe"
   fi
 
-  output_path="$OUT_DIR/${BIN_NAME}-${target}${ext}"
-  echo "-> $target"
+  mkdir -p "$OUT_DIR/$platform_dir"
+  output_path="$OUT_DIR/$platform_dir/${BIN_NAME}${ext}"
+  echo "-> $target ($platform_dir)"
 
   deno compile \
     --allow-all \
