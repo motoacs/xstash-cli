@@ -25,6 +25,39 @@ Deno.test('post upsert is idempotent', () => {
   }
 });
 
+Deno.test('post upsert tolerates missing author user and restores link later', () => {
+  const db = createInMemoryDb();
+  try {
+    const post = {
+      id: 'p-missing-author',
+      author_id: 'u-missing',
+      text: 'hello',
+      created_at: '2026-02-10T00:00:00Z',
+    };
+
+    assertEquals(upsertPosts(db, [post], '2026-02-10T00:00:00Z'), 1);
+
+    const beforeUser = db.prepare('SELECT author_id FROM posts WHERE id=?').get(
+      'p-missing-author',
+    ) as {
+      author_id: string | null;
+    };
+    assertEquals(beforeUser.author_id, null);
+
+    upsertUsers(db, [{ id: 'u-missing', username: 'ghost' }], '2026-02-10T00:01:00Z');
+    assertEquals(upsertPosts(db, [post], '2026-02-10T00:01:00Z'), 0);
+
+    const afterUser = db.prepare('SELECT author_id FROM posts WHERE id=?').get(
+      'p-missing-author',
+    ) as {
+      author_id: string | null;
+    };
+    assertEquals(afterUser.author_id, 'u-missing');
+  } finally {
+    db.close();
+  }
+});
+
 Deno.test('bookmark discovered_at is stable and last_synced_at updates', () => {
   const db = createInMemoryDb();
   try {
@@ -134,6 +167,38 @@ Deno.test('relations integrity for post_references and post_media', () => {
     const pm = db.prepare('SELECT COUNT(*) AS c FROM post_media').get() as { c: number };
     assertEquals(ref.c, 1);
     assertEquals(pm.c, 1);
+  } finally {
+    db.close();
+  }
+});
+
+Deno.test('attachPostMedia skips unknown media keys to avoid FK failures', () => {
+  const db = createInMemoryDb();
+  try {
+    upsertPosts(
+      db,
+      [{ id: 'p1', text: 'root', created_at: '2026-02-10T00:00:00Z' }],
+      '2026-02-10T00:00:00Z',
+    );
+
+    upsertMedia(
+      db,
+      [
+        {
+          media_key: '3_known',
+          type: 'photo',
+          url: 'https://example.com/a.jpg',
+        },
+      ],
+      '2026-02-10T00:00:00Z',
+      '/tmp/media',
+    );
+
+    attachPostMedia(db, [{ id: 'p1', attachments: { media_keys: ['3_known', '3_missing'] } }]);
+
+    const rows = db.prepare('SELECT media_key FROM post_media WHERE post_id=? ORDER BY media_key')
+      .all('p1') as Array<{ media_key: string }>;
+    assertEquals(rows, [{ media_key: '3_known' }]);
   } finally {
     db.close();
   }

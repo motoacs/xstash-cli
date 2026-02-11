@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert';
+import { exportAsCsv } from '../src/export/csv.ts';
 import { exportAsJson } from '../src/export/json.ts';
 import { exportAsMarkdown } from '../src/export/markdown.ts';
 import { upsertPosts } from '../src/db/posts.ts';
@@ -121,6 +122,21 @@ Deno.test('markdown export format includes heading, quote nesting, and media ref
     assertStringIncludes(markdown, '> @bob: quoted post');
     assertStringIncludes(markdown, '> > @alice: nested quoted');
     assert(markdown.includes('!['));
+  } finally {
+    db.close();
+  }
+});
+
+Deno.test('csv export includes media local paths and urls columns', () => {
+  const db = createInMemoryDb();
+  try {
+    seedBaseData(db);
+    const csv = exportAsCsv(db, { includeReferenced: true });
+
+    assertStringIncludes(csv, 'media_local_paths');
+    assertStringIncludes(csv, 'media_urls');
+    assertStringIncludes(csv, '/tmp/xstash-media/3_/3_abc.jpg');
+    assertStringIncludes(csv, 'https://example.com/a.jpg');
   } finally {
     db.close();
   }

@@ -21,7 +21,8 @@ import { upsertUsers } from '../db/users.ts';
 import type { AppConfig, AuthOverride } from '../types/config.ts';
 import type { XBookmarksResponse, XMediaEntity, XPostEntity, XUserEntity } from '../types/x.ts';
 import { envAuthOverride, mergeOAuth, readConfigFile, writeConfigFile } from '../utils/config.ts';
-import { logInfo } from '../utils/logger.ts';
+import { logInfo, logWarn } from '../utils/logger.ts';
+import { isSkippableMediaDownloadError } from '../utils/media-download.ts';
 import { ensureAppDirs, resolveConfigPaths } from '../utils/paths.ts';
 import { nowIso, utcBilledDay } from '../utils/time.ts';
 import { applyBookmarkObservation, resolveRequestedMaxNew } from './sync-logic.ts';
@@ -54,6 +55,18 @@ function confirmOrAbort(question: string): void {
   const response = prompt(`${question} [y/N]`);
   if (!response || !['y', 'yes'].includes(response.trim().toLowerCase())) {
     throw new Error('Sync cancelled by user');
+  }
+}
+
+function shouldPromptForCostConfirmation(options: Pick<SyncCommandOptions, 'confirmCost' | 'yes'>): boolean {
+  return options.confirmCost && !options.yes;
+}
+
+function ensureInteractivePromptAvailable(isTerminal: boolean): void {
+  if (!isTerminal) {
+    throw new Error(
+      'Cost confirmation requires an interactive terminal. Use --yes to auto-accept or --no-confirm-cost to skip confirmation.',
+    );
   }
 }
 
@@ -114,6 +127,7 @@ async function saveMediaIfNeeded(
   client: XApiClient,
   mediaRoot: string,
   mediaItems: XMediaEntity[],
+  onSkippedDownload?: (params: { mediaKey: string; url: string; reason: string }) => void,
 ): Promise<void> {
   const pathStmt = db.prepare('SELECT local_path FROM media WHERE media_key = ?');
   for (const media of mediaItems) {
@@ -133,7 +147,21 @@ async function saveMediaIfNeeded(
     }
 
     if (target.url) {
-      const result = await client.downloadMedia(target.url, localPath);
+      let result: { downloaded: boolean; actualPath: string };
+      try {
+        result = await client.downloadMedia(target.url, localPath);
+      } catch (error) {
+        if (isSkippableMediaDownloadError(error)) {
+          onSkippedDownload?.({
+            mediaKey: media.media_key,
+            url: target.url,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+          continue;
+        }
+        throw error;
+      }
+
       if (result.downloaded && result.actualPath !== localPath) {
         db.prepare('UPDATE media SET local_path = ? WHERE media_key = ?')
           .run(result.actualPath, media.media_key);
@@ -153,6 +181,7 @@ async function resolveQuoteReferences(params: {
   mediaEnabled: boolean;
   mediaRoot: string;
   onApiRequest?: () => void;
+  onMediaDownloadSkipped?: (params: { mediaKey: string; url: string; reason: string }) => void;
 }): Promise<void> {
   let layerPosts = params.rootPosts;
 
@@ -223,7 +252,13 @@ async function resolveQuoteReferences(params: {
         });
 
         if (params.mediaEnabled) {
-          await saveMediaIfNeeded(params.db, params.client, params.mediaRoot, media);
+          await saveMediaIfNeeded(
+            params.db,
+            params.client,
+            params.mediaRoot,
+            media,
+            params.onMediaDownloadSkipped,
+          );
         }
 
         trackApiReads({
@@ -304,7 +339,8 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
   );
 
   logInfo(costEstimateText(maxNew.requestedMaxNew, appConfig));
-  if (options.confirmCost && !options.yes) {
+  if (shouldPromptForCostConfirmation(options)) {
+    ensureInteractivePromptAvailable(Deno.stdin.isTerminal());
     confirmOrAbort('Continue sync with this estimate?');
   }
 
@@ -323,6 +359,7 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
     apiUsersReadCount: 0,
   };
   let rawApiRequestCount = 0;
+  let skippedMediaDownloads = 0;
 
   try {
     const client = new XApiClient({
@@ -338,6 +375,16 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
 
     const knownThreshold = appConfig.sync.known_boundary_threshold;
     const maxDepth = Math.min(3, Math.max(1, appConfig.sync.quote_resolve_max_depth));
+    const onMediaDownloadSkipped = (params: {
+      mediaKey: string;
+      url: string;
+      reason: string;
+    }) => {
+      skippedMediaDownloads += 1;
+      logWarn(
+        `Skipped media download (${params.mediaKey}) ${params.url}: ${params.reason}`,
+      );
+    };
 
     let knownStreak = 0;
     let shouldStop = false;
@@ -390,7 +437,13 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
       });
 
       if (options.media) {
-        await saveMediaIfNeeded(db, client, paths.mediaRoot, mediaItems);
+        await saveMediaIfNeeded(
+          db,
+          client,
+          paths.mediaRoot,
+          mediaItems,
+          onMediaDownloadSkipped,
+        );
       }
 
       await resolveQuoteReferences({
@@ -406,6 +459,7 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
         onApiRequest: () => {
           rawApiRequestCount += 1;
         },
+        onMediaDownloadSkipped,
       });
 
       trackApiReads({
@@ -436,6 +490,7 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
     logInfo(`- API reads (post): ${counters.apiPostsReadCount}`);
     logInfo(`- API reads (user): ${counters.apiUsersReadCount}`);
     logInfo(`- raw API requests: ${rawApiRequestCount}`);
+    logInfo(`- media download skipped: ${skippedMediaDownloads}`);
     logInfo(`- estimated cost USD (run, after daily dedup): ${runCost.toFixed(4)}`);
     logInfo(`- estimated cost USD (total, after daily dedup): ${totalCost.toFixed(4)}`);
   } catch (error) {
@@ -453,4 +508,5 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
   }
 }
 
+export { ensureInteractivePromptAvailable, shouldPromptForCostConfirmation };
 export type { SyncCommandOptions };

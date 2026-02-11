@@ -63,20 +63,28 @@ async function markdownForItem(
     lines.push('');
     for (const media of item.media) {
       const alt = media.alt_text ?? media.media_key;
+      let source: string | null = null;
       if (media.local_path) {
         try {
           const info = await Deno.stat(media.local_path);
           if (info.isFile) {
-            lines.push(`![${alt}](${media.local_path})`);
-            continue;
+            source = media.local_path;
           }
         } catch {
           // Fall through to remote URL rendering.
         }
       }
 
-      if (media.url) {
-        lines.push(`![${alt}](${media.url})`);
+      if (!source && media.url) {
+        source = media.url;
+      }
+
+      if (source) {
+        if (media.type === 'video' || media.type === 'animated_gif') {
+          lines.push(`<video controls src="${source}">${alt}</video>`);
+        } else {
+          lines.push(`![${alt}](${source})`);
+        }
       } else {
         lines.push(`[${alt}](missing: ${media.media_key})`);
       }

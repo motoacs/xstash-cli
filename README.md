@@ -10,6 +10,7 @@
 - Cost-aware sync (`--max-new`, pre-run estimate, API read accounting)
 - Quote/reference resolution with BFS depth limit (`<= 3`)
 - Optional media persistence and post-media many-to-many relation
+- Media download permission errors (401/403/404/410) are warned and skipped without aborting sync
 - OAuth 2.0 Authorization Code + PKCE + refresh token support
 - Export formats: `json` (`schema_version=1.1.0`), `md`, `csv`
 - Stats command for bookmark volume, top authors, media breakdown, and estimated cost
@@ -98,6 +99,9 @@ xstash export --format json -o bookmarks.json
 
 # Export as Markdown
 xstash export --format md -o bookmarks.md
+
+# To include local media embeds in Markdown, sync media first
+# xstash sync --media
 ```
 
 ## Environment Variables
@@ -132,6 +136,34 @@ xstash config show
 xstash config path
 xstash stats
 ```
+
+## Basic Command Options
+
+### `xstash sync`
+
+| Option | Default | What it does | Use when |
+| --- | --- | --- | --- |
+| `--max-new <n|all>` | `200` on initial sync, config default on incremental sync | Limits how many new bookmarks are saved in a run (`all` = no cap) | You want to cap cost/time per run |
+| `--media` | off | Saves media metadata and tries to download media files | You want media in Markdown exports or local archive |
+| `--confirm-cost` | off | Prompts before starting sync after cost estimate | You want manual confirmation each run |
+| `--yes` | off | Auto-accepts confirmations (works with `--confirm-cost`) | You run non-interactively |
+
+### `xstash export`
+
+| Option | Default | What it does | Use when |
+| --- | --- | --- | --- |
+| `--format <md|csv|json>` | required | Chooses output format | Always required |
+| `-o <path>`, `--output <path>` | stdout | Writes result to file/directory instead of terminal | You want a saved export file |
+| `--since <date>` | none | Includes bookmarks discovered on/after date | You want exports from a start date |
+| `--until <date>` | none | Includes bookmarks discovered on/before date | You want exports up to an end date |
+| `--include-referenced` | off | Includes referenced posts (quoted/reply/retweet relations) | You want context posts in export |
+
+### `xstash config init`
+
+| Option | Default | What it does | Use when |
+| --- | --- | --- | --- |
+| `--callback-port <port>` | `38080` | Sets local OAuth callback port | `38080` is unavailable or blocked |
+| `--no-browser` | off | Prints auth URL without opening browser automatically | You open auth URL manually |
 
 ## Design Contracts
 

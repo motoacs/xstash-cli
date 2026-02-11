@@ -138,6 +138,7 @@ export function upsertMedia(
 }
 
 export function attachPostMedia(db: DatabaseSync, posts: XPostEntity[]): void {
+  const mediaExistsStmt = db.prepare('SELECT 1 FROM media WHERE media_key=?');
   const stmt = db.prepare(`
     INSERT INTO post_media (post_id, media_key)
     VALUES (?, ?)
@@ -147,6 +148,9 @@ export function attachPostMedia(db: DatabaseSync, posts: XPostEntity[]): void {
   for (const post of posts) {
     const keys = post.attachments?.media_keys ?? [];
     for (const mediaKey of keys) {
+      if (!mediaExistsStmt.get(mediaKey)) {
+        continue;
+      }
       stmt.run(post.id, mediaKey);
     }
   }

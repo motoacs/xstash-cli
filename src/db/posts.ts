@@ -12,6 +12,7 @@ export function upsertPosts(db: DatabaseSync, posts: XPostEntity[], fetchedAt: s
   }
 
   const existsStmt = db.prepare('SELECT 1 FROM posts WHERE id=?');
+  const userExistsStmt = db.prepare('SELECT 1 FROM users WHERE id=?');
   const stmt = db.prepare(`
     INSERT INTO posts (
       id,
@@ -53,13 +54,14 @@ export function upsertPosts(db: DatabaseSync, posts: XPostEntity[], fetchedAt: s
       inserted += 1;
     }
 
+    const authorId = post.author_id && userExistsStmt.get(post.author_id) ? post.author_id : null;
     const text = post.text ?? '';
     const fullText = typeof post.note_tweet === 'object' && post.note_tweet !== null
       ? (post.note_tweet as { text?: string }).text ?? null
       : null;
     stmt.run(
       post.id,
-      post.author_id ?? null,
+      authorId,
       text,
       fullText,
       post.created_at ?? new Date(0).toISOString(),
