@@ -2,6 +2,8 @@
 
 `xstash-cli` is a Deno-based CLI that syncs your X bookmarks into local SQLite, tracks API usage/cost estimates, and exports data as JSON/Markdown/CSV.
 
+日本語版README: [README.ja.md](README.ja.md)
+
 ## Features
 
 - Incremental bookmark sync with bookmark-boundary stop logic (`bookmarks` table based)
