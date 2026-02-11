@@ -1,7 +1,8 @@
 # xstash-cli 詳細設計書
 
-- 文書版数: v1.2
+- 文書版数: v1.3
 - 作成日: 2026-02-10
+- 更新日: 2026-02-11
 - 対象リポジトリ: `xstash-cli`
 - 対象: Bookmarks 同期・保存・エクスポート CLI
 
@@ -122,31 +123,41 @@ X Bookmarks API は「実際にブックマークした日時」を返さない�
 
 ## 5.1 sync
 
-`xstash sync [--max-new <n|all>] [--media] [--confirm-cost|--no-confirm-cost] [--yes]`
+`xstash sync [--max-new <n|all>] [--media] [--confirm-cost|--no-confirm-cost] [--yes] [--client-id <id>] [--client-secret <secret>] [--access-token <token>] [--refresh-token <token>] [--expires-at <iso>]`
 
 - `--max-new`: 新規 bookmark の最大保存件数
 - `--media`: メディアを保存
 - `--confirm-cost`: 実行前確認を要求（既定）
 - `--no-confirm-cost`: 実行前確認を省略
 - `--yes`: すべての確認を自動承認
+- 認証系オプション（`--client-id` / `--client-secret` / `--access-token` / `--refresh-token` / `--expires-at`）は、その実行に限って設定を上書きする
 
 同期完了時サマリ:
 
-1. 新規 bookmark 件数
-2. 参照解決投稿件数
-3. 新規メディア保存件数
-4. API 読み取り件数（post/user。生リクエスト件数）
-5. スキップしたメディアDL件数（権限不足・削除等）
-6. 推定コスト（今回 / 累計。日次重複排除後）
+1. 実行モード（`initial` / `incremental`）
+2. 新規 bookmark 件数
+3. 参照解決投稿件数
+4. 新規メディア保存件数
+5. API 読み取り件数（post/user の resource_id ベース）
+6. 生 API リクエスト件数（HTTP）
+7. スキップしたメディアDL件数（権限不足・削除等）
+8. 推定コスト（今回 / 累計。日次重複排除後）
 
 ## 5.2 export
 
 `xstash export --format <md|csv|json> [--since <date>] [--until <date>] [--include-referenced] [-o <path>]`
 
+出力先解決規則:
+
+1. `-o` 未指定: stdout
+2. `-o` が既存ディレクトリ: `<dir>/bookmarks.<format>`（`md` のみ `bookmarks.md`）
+3. `-o` が拡張子なしの未存在パス: ディレクトリ扱いで `<path>/bookmarks.<format>`
+4. それ以外: 指定パスをそのまま出力先にする
+
 ## 5.3 config
 
-1. `xstash config init [--callback-port <port>] [--no-browser]`
-2. `xstash config show`
+1. `xstash config init [--callback-port <port>] [--no-browser] [--client-id <id>] [--client-secret <secret>] [--access-token <token>] [--refresh-token <token>] [--expires-at <iso>]`
+2. `xstash config show [--client-id <id>] [--client-secret <secret>] [--access-token <token>] [--refresh-token <token>] [--expires-at <iso>]`
 3. `xstash config path`
 
 ## 5.4 stats
@@ -157,7 +168,8 @@ X Bookmarks API は「実際にブックマークした日時」を返さない�
 - 期間
 - 著者上位
 - メディア内訳
-- API 課金推定（投稿・ユーザー別）
+- API 使用量（raw reads: post/user）
+- API 課金推定（billable dedupe: post/user/total）
 
 ## 6. データ設計（SQLite）
 
@@ -290,6 +302,7 @@ CREATE INDEX IF NOT EXISTS idx_api_requests_billable_key ON api_requests(
 4. `posts.author_id` を NULL 許容 + `ON DELETE SET NULL`
 5. 課金追跡を `api_requests`（全量）+ `api_billable_reads`（日次重複排除）に分離
 6. `sync_runs.requested_max_new` を `INTEGER NULL`（NULL=all）に変更
+7. `posts.author_id` は `users` 未取得時に `NULL` で保持し、後続同期で復元可能な upsert ポリシーを採用
 
 ## 6.2 コスト集計定義
 
@@ -339,7 +352,7 @@ FROM (
 
 ## 7.2 参照投稿解決（引用優先）
 
-1. 起点投稿の `referenced_tweets` は `quoted` / `replied_to` / `retweeted` を全て `post_references` に保存
+1. `post_references` には、`post_id` / `referenced_post_id` の両方が `posts` に存在する参照のみ保存する
 2. API 追加取得は `reference_type = quoted` のみを対象とする
 3. `replied_to` / `retweeted` は expansion に含まれる場合のみ保存し、追加 API 取得は行わない
 4. 深さ優先ではなく BFS で `depth <= 3`
@@ -350,12 +363,15 @@ FROM (
 ## 7.3 メディア保存（`--media`）
 
 1. `includes.media` を `media` / `post_media` に upsert
-2. `local_path` は `<data_root>/media/<media_key[0:2]>/<media_key>.<ext>` に正規化して保存
-3. `local_path` が存在しファイル実体がある場合は再DLしない
-4. `ext` は `Content-Type` 優先、取得不可時は URL 末尾から推定、最終手段は `bin`
-5. video は `variants` から最高品質を選択
-6. 429/5xx は再試行ポリシーに従う
-7. `401/403/404/410` のDL失敗は警告してスキップし、同期全体は継続する
+2. `post_media` への関連付けは `media` に存在する `media_key` のみを対象にする（FK違反回避）
+3. `local_path` は `<data_root>/media/<media_key[0:2]>/<media_key>.<ext>` に正規化して保存
+4. DB上の `media.local_path` にファイル実体があれば再DLしない（推定パスよりDB値を優先）
+5. 初期 `ext` は `Content-Type`（variant metadata）優先、取得不可時は URL 末尾、最終手段は `bin`
+6. DL成功時は HTTP レスポンスの `Content-Type` で再判定し、拡張子が異なる場合は保存先を補正する
+7. `media` upsert 時、既存の非 `bin` な `local_path` を新規推定 `*.bin` で後退上書きしない
+8. video は `variants` から最高品質を選択
+9. 429/5xx は再試行ポリシーに従う
+10. `401/403/404/410` のDL失敗は warning を出してスキップし、同期全体は継続する
 
 ## 7.4 users 更新ポリシー
 
@@ -365,8 +381,8 @@ FROM (
 
 ## 8. エラー処理・再試行・レート制限
 
-1. `429`: `x-rate-limit-reset` 優先、なければ `Retry-After` を使用
-2. `5xx` / ネットワーク失敗: 指数バックオフ（最大3回、ジッターあり）
+1. `429`: `x-rate-limit-reset` 優先、なければ `Retry-After` を待機時間に使う。どちらも無ければ指数バックオフ
+2. `5xx` / ネットワーク失敗: 指数バックオフ（ジッターあり、再試行最大3回=合計4試行）
 3. メディアDLの `401/403/404/410` は warning を出してスキップ（run は継続）
 4. それ以外の恒久失敗は `sync_runs.status='failed'` と `error_message` に記録
 5. 再実行時は `bookmarks` 境界判定により自然に再開
@@ -412,6 +428,14 @@ FROM (
 
 CLI 起動時に、カレントディレクトリの `.env` が存在すれば読み込む。
 ただし、すでにプロセス環境変数に設定されているキーは上書きしない。
+
+`.env` の解釈規則:
+
+1. 空行・`#` 始まり行を無視
+2. `export KEY=VALUE` を許容
+3. シングルクォート / ダブルクォート値を許容
+4. ダブルクォート値では `\n` `\r` `\t` `\"` `\\` を展開
+5. 非クォート値では空白 + `#` 以降をインラインコメントとして除去
 
 優先順位: CLI 引数 > 環境変数 > config ファイル
 
@@ -522,6 +546,8 @@ CLI 起動時に、カレントディレクトリの `.env` が存在すれば�
 }
 ```
 
+- `media[].local_path` は DB に保持された保存先文字列をそのまま出力する。実体ファイルの存在は保証しない（Markdown生成時に存在確認する）。
+
 ## 10.3 JSON スキーマ運用規則
 
 1. 後方互換を壊す変更は `schema_version` をメジャー更新
@@ -535,16 +561,40 @@ CLI 起動時に、カレントディレクトリの `.env` が存在すれば�
 1. 出力先:
    - `-o` 未指定: stdout
    - `-o` がディレクトリ: `<dir>/bookmarks.md`
+   - `-o` が拡張子なしの未存在パス: ディレクトリ扱いで `<path>/bookmarks.md`
    - `-o` がファイル: 指定パス
 2. 並び順: `bookmarks.last_synced_at DESC`、同値時 `post.id DESC`
 3. 各投稿ブロック:
    - 見出し: `## @{username} | {created_at} | {post_id[:8]}`
    - 本文: `post.full_text || post.text`
    - メタ: 投稿URL、`created_at`、`bookmark.discovered_at`
-4. 引用投稿: `>` の入れ子で `depth` を表現（最大3段）
+4. 引用投稿: `>` の入れ子で `depth` を表現（最大3段、例: `> >`）
 5. メディア:
-   - `local_path` が存在すれば `![alt](local_path)`
-   - なければ `![alt](url)` またはリンク
+   - `local_path` の実体が存在すればそれを優先
+   - `type=video|animated_gif` は `<video controls src="...">alt</video>`
+   - それ以外は `![alt](...)`
+   - `local_path` / `url` の両方が使えない場合は `[alt](missing: media_key)`
+
+## 10.5 CSV エクスポート仕様
+
+CSV は UTF-8、1行目ヘッダ固定、カンマ区切り、必要時はダブルクオートでエスケープする。
+
+ヘッダ列（順序固定）:
+
+1. `post_id`
+2. `author_username`
+3. `author_name`
+4. `created_at`
+5. `text`（`post.full_text || post.text`）
+6. `url`
+7. `discovered_at`
+8. `last_synced_at`
+9. `bookmarked_at`（常に空欄相当）
+10. `bookmarked_at_source`（`not_provided_by_x_api`）
+11. `media_count`
+12. `media_local_paths`（`|` 区切り）
+13. `media_urls`（`|` 区切り）
+14. `reference_count`
 
 ## 11. 実装構成
 
@@ -553,6 +603,7 @@ src/
   index.ts
   commands/
     sync.ts
+    sync-logic.ts
     export.ts
     config.ts
     stats.ts
@@ -571,14 +622,18 @@ src/
     sync-runs.ts
     api-requests.ts
   export/
+    dataset.ts
     markdown.ts
     csv.ts
     json.ts
   utils/
     config.ts
+    dotenv.ts
     paths.ts
     logger.ts
+    media-download.ts
     retry.ts
+    time.ts
 ```
 
 ## 12. 受け入れ基準
@@ -593,6 +648,7 @@ src/
 8. JSON エクスポートが本設計の `schema_version=1.1.0` を満たす
 9. API リクエスト全量記録と日次重複排除集計が両立している
 10. Markdown エクスポートが 10.4 に準拠し、引用ネストとメディア参照が正しく出力される
+11. メディアDLの `401/403/404/410` が run 全体失敗にならず、警告スキップされる
 
 ## 13. 将来拡張
 
