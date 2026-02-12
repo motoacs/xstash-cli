@@ -61,22 +61,29 @@ Notes:
 Prefer JSON for agent analysis:
 
 ```bash
-xstash export --format json -o /tmp/xstash-bookmarks.json
+xstash export --format json -o ./.xstash/tmp/xstash-bookmarks.json
 ```
 
 For recency-focused analysis, filter by date:
 
 ```bash
-xstash export --format json --since <YYYY-MM-DD> --until <YYYY-MM-DD> -o /tmp/xstash-bookmarks-window.json
+xstash export --format json --since <YYYY-MM-DD> --until <YYYY-MM-DD> -o ./.xstash/tmp/xstash-bookmarks-window.json
 ```
 
 Include referenced posts only when contextual threads are required:
 
 ```bash
-xstash export --format json --include-referenced -o /tmp/xstash-bookmarks-with-context.json
+xstash export --format json --include-referenced -o ./.xstash/tmp/xstash-bookmarks-with-context.json
 ```
 
 Remember: `bookmark.bookmarked_at` is always `null` by design. Use `bookmark.discovered_at` and `bookmark.last_synced_at` for timeline analysis.
+
+Path guidance:
+- Prefer paths under the current working directory (for example, `./.xstash/tmp/...`) to reduce sandbox/permission friction for agents.
+- Avoid hardcoded `/tmp` in shared instructions because it is Unix-specific and not portable to Windows.
+- If OS temp storage is explicitly needed, use platform-aware environment variables:
+  - Bash/zsh: `${TMPDIR:-/tmp}`
+  - PowerShell: `$env:TEMP`
 
 ## 4) Derive interest signals
 
