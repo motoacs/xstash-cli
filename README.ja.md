@@ -200,6 +200,29 @@ bash scripts/build-binaries.sh
 成果物はデフォルトで`dist/<platform>/`に生成され、バイナリ名は`xstash`です
 （Windowsは`xstash.exe`）。
 
+## GitHub Release添付ファイルの生成
+
+Releaseページに添付するアーカイブ（`.tar.gz` / `.zip`）と
+`SHA256SUMS.txt` は次で生成できます。
+
+```bash
+bash scripts/build-release-assets.sh --version v0.1.0
+```
+
+デフォルトの出力先は `dist/release/` です。
+
+- `xstash-v0.1.0-linux-x64.tar.gz`
+- `xstash-v0.1.0-macos-x64.tar.gz`
+- `xstash-v0.1.0-macos-arm64.tar.gz`
+- `xstash-v0.1.0-windows-x64.zip`
+- `SHA256SUMS.txt`
+
+すでにバイナリがある場合は `--skip-build` を使って再ビルドを省略できます。
+
+```bash
+bash scripts/build-release-assets.sh --version v0.1.0 --skip-build
+```
+
 ## 補足
 
 - 設定の優先順位: CLI引数 > 環境変数 > 設定ファイル

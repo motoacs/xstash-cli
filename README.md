@@ -202,6 +202,28 @@ bash scripts/build-binaries.sh
 Artifacts are generated in `dist/<platform>/` by default, with binary name `xstash`
 (`xstash.exe` on Windows).
 
+## Build GitHub Release Assets
+
+Create release-attachment files (`.tar.gz` / `.zip` + `SHA256SUMS.txt`) with:
+
+```bash
+bash scripts/build-release-assets.sh --version v0.1.0
+```
+
+Output is generated in `dist/release/` by default:
+
+- `xstash-v0.1.0-linux-x64.tar.gz`
+- `xstash-v0.1.0-macos-x64.tar.gz`
+- `xstash-v0.1.0-macos-arm64.tar.gz`
+- `xstash-v0.1.0-windows-x64.zip`
+- `SHA256SUMS.txt`
+
+If you already built binaries, skip rebuilding with:
+
+```bash
+bash scripts/build-release-assets.sh --version v0.1.0 --skip-build
+```
+
 ## Notes
 
 - Config precedence: CLI args > env vars > config file
