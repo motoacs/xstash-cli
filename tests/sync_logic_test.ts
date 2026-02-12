@@ -3,6 +3,7 @@ import {
   applyBookmarkObservation,
   collectQuotedEdgesWithinDepth,
   parseMaxNewValue,
+  resolveBookmarksPageSize,
   resolveRequestedMaxNew,
 } from '../src/commands/sync-logic.ts';
 import type { BoundaryState } from '../src/commands/sync-logic.ts';
@@ -78,6 +79,29 @@ Deno.test('max-new stops both initial and incremental flow', () => {
   const result = applyBookmarkObservation(state, 'new');
   assertEquals(result.stop, true);
   assertEquals(result.state.newBookmarksCount, 2);
+});
+
+Deno.test('resolveBookmarksPageSize uses large page for initial mode', () => {
+  assertEquals(resolveBookmarksPageSize('initial', 5, null), 100);
+});
+
+Deno.test('resolveBookmarksPageSize uses known boundary threshold in incremental mode', () => {
+  assertEquals(resolveBookmarksPageSize('incremental', 5, null), 5);
+  assertEquals(resolveBookmarksPageSize('incremental', 12, null), 12);
+});
+
+Deno.test('resolveBookmarksPageSize clamps invalid or tiny values in incremental mode', () => {
+  assertEquals(resolveBookmarksPageSize('incremental', 1, null), 5);
+  assertEquals(resolveBookmarksPageSize('incremental', 0, null), 5);
+  assertEquals(resolveBookmarksPageSize('incremental', -10, null), 5);
+  assertEquals(resolveBookmarksPageSize('incremental', 150, null), 100);
+});
+
+Deno.test('resolveBookmarksPageSize prefers explicit incremental page size when configured', () => {
+  assertEquals(resolveBookmarksPageSize('incremental', 5, 20), 20);
+  assertEquals(resolveBookmarksPageSize('incremental', 5, 3), 5);
+  assertEquals(resolveBookmarksPageSize('incremental', 5, 101), 100);
+  assertEquals(resolveBookmarksPageSize('incremental', 5, -1), 5);
 });
 
 Deno.test('quote edge traversal is bounded by max depth', () => {

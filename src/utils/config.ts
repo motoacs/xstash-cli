@@ -12,6 +12,7 @@ const DEFAULT_CONFIG: AppConfig = {
     default_incremental_max_new: 'all',
     quote_resolve_max_depth: 3,
     known_boundary_threshold: 5,
+    incremental_bookmarks_page_size: null,
   },
   cost: {
     unit_price_post_read_usd: 0.005,
@@ -95,6 +96,10 @@ function mergeConfig(base: AppConfig, override?: Partial<AppConfig>): AppConfig 
   if (!override) {
     return structuredClone(base);
   }
+  const incrementalBookmarksPageSize = override.sync?.incremental_bookmarks_page_size !==
+      undefined
+    ? override.sync.incremental_bookmarks_page_size
+    : base.sync.incremental_bookmarks_page_size;
   return {
     version: override.version ?? base.version,
     oauth: {
@@ -114,6 +119,7 @@ function mergeConfig(base: AppConfig, override?: Partial<AppConfig>): AppConfig 
         base.sync.quote_resolve_max_depth,
       known_boundary_threshold: override.sync?.known_boundary_threshold ??
         base.sync.known_boundary_threshold,
+      incremental_bookmarks_page_size: incrementalBookmarksPageSize,
     },
     cost: {
       unit_price_post_read_usd: override.cost?.unit_price_post_read_usd ??

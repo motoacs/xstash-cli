@@ -6,7 +6,7 @@
 
 ## Features
 
-- Incremental bookmark sync with bookmark-boundary stop logic (`bookmarks` table based)
+- Incremental bookmark sync with bookmark-boundary stop logic (`bookmarks` table based) and small page fetches to reduce over-read cost
 - Cost-aware sync (`--max-new`, pre-run estimate, API read accounting)
 - Quote/reference resolution with BFS depth limit (`<= 3`)
 - Optional media persistence and post-media many-to-many relation
@@ -144,13 +144,13 @@ xstash stats
 
 ### `xstash sync`
 
-| Option                             | Default                                                   | What it does                                                      | Use when                                            |
-| ---------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------- |
-| `--max-new <n>` or `--max-new all` | `200` on initial sync, config default on incremental sync | Limits how many new bookmarks are saved in a run (`all` = no cap) | You want to cap cost/time per run                   |
-| `--media`                          | off                                                       | Saves media metadata and tries to download media files            | You want media in Markdown exports or local archive |
-| `--confirm-cost`                   | on                                                        | Prompts before starting sync after cost estimate                  | Default behavior; you want to keep prompt enabled   |
-| `--no-confirm-cost`                | off                                                       | Skips confirmation prompt and starts sync immediately             | You want one-shot interactive runs without prompt   |
-| `--yes`                            | off                                                       | Auto-accepts confirmations (works with `--confirm-cost`)          | You run non-interactively                           |
+| Option                             | Default                                                   | What it does                                                                                                                                                                                                                     | Use when                                            |
+| ---------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `--max-new <n>` or `--max-new all` | `200` on initial sync, config default on incremental sync | Limits how many new bookmarks are saved in a run (`all` = no cap). Incremental mode fetches bookmarks in small pages to avoid large over-reads per page (configurable via `sync.incremental_bookmarks_page_size`, default auto). | You want to cap cost/time per run                   |
+| `--media`                          | off                                                       | Saves media metadata and tries to download media files                                                                                                                                                                           | You want media in Markdown exports or local archive |
+| `--confirm-cost`                   | on                                                        | Prompts before starting sync after cost estimate                                                                                                                                                                                 | Default behavior; you want to keep prompt enabled   |
+| `--no-confirm-cost`                | off                                                       | Skips confirmation prompt and starts sync immediately                                                                                                                                                                            | You want one-shot interactive runs without prompt   |
+| `--yes`                            | off                                                       | Auto-accepts confirmations (works with `--confirm-cost`)                                                                                                                                                                         | You run non-interactively                           |
 
 ### `xstash export`
 
@@ -174,6 +174,9 @@ xstash stats
 - No external X API SDK: direct `fetch` only
 - Incremental stop checks `bookmarks` presence, not `posts`
 - `known_boundary_threshold` applies to incremental mode only
+- Incremental bookmark page size is cost-aware:
+  - if `sync.incremental_bookmarks_page_size` is set, `max_results` uses that value (clamped to `5..100`)
+  - otherwise `max_results` follows `known_boundary_threshold` (clamped to `5..100`)
 - X bookmark time is not persisted from API; exports use:
   - `bookmark.bookmarked_at = null`
   - `bookmark.bookmarked_at_source = "not_provided_by_x_api"`

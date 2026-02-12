@@ -10,8 +10,8 @@ Deno.test('fetchBookmarkPages paginates until next_token exhausted', async () =>
 
   const calls: string[] = [];
   const client = {
-    getBookmarksPage(_userId: string, token?: string) {
-      calls.push(token ?? '');
+    getBookmarksPage(_userId: string, token?: string, maxResults?: number) {
+      calls.push(`${token ?? ''}:${maxResults ?? ''}`);
       return Promise.resolve(pages[calls.length - 1]);
     },
   };
@@ -27,7 +27,7 @@ Deno.test('fetchBookmarkPages paginates until next_token exhausted', async () =>
   );
 
   assertEquals(seen, ['1', '2', '3']);
-  assertEquals(calls, ['', 'n1', 'n2']);
+  assertEquals(calls, [':', 'n1:', 'n2:']);
 });
 
 Deno.test('fetchBookmarkPages stops when callback returns false', async () => {
@@ -56,4 +56,30 @@ Deno.test('fetchBookmarkPages stops when callback returns false', async () => {
   );
 
   assertEquals(seen, ['1']);
+});
+
+Deno.test('fetchBookmarkPages forwards maxResults to client calls', async () => {
+  const pages = [
+    { data: [{ id: '1' }], meta: { next_token: 'n1' } },
+    { data: [{ id: '2' }], meta: {} },
+  ];
+  let index = 0;
+  const maxResultsSeen: Array<number | undefined> = [];
+  const client = {
+    getBookmarksPage(_userId: string, _token?: string, maxResults?: number) {
+      maxResultsSeen.push(maxResults);
+      const page = pages[index];
+      index += 1;
+      return Promise.resolve(page);
+    },
+  };
+
+  await fetchBookmarkPages(
+    client,
+    'u1',
+    () => Promise.resolve(true),
+    { maxResults: 7 },
+  );
+
+  assertEquals(maxResultsSeen, [7, 7]);
 });

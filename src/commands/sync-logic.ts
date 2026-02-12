@@ -7,6 +7,10 @@ export interface ResolvedMaxNew {
   display: string;
 }
 
+const MIN_BOOKMARKS_PAGE_SIZE = 5;
+const MAX_BOOKMARKS_PAGE_SIZE = 100;
+const DEFAULT_INCREMENTAL_BOOKMARKS_PAGE_SIZE = 5;
+
 export interface BoundaryState {
   mode: SyncModeLite;
   knownBoundaryThreshold: number;
@@ -89,6 +93,36 @@ export function applyBookmarkObservation(
   }
 
   return { stop: false, state: next };
+}
+
+export function resolveBookmarksPageSize(
+  mode: SyncModeLite,
+  knownBoundaryThreshold: number,
+  incrementalBookmarksPageSize: number | null,
+): number {
+  if (mode === 'initial') {
+    return MAX_BOOKMARKS_PAGE_SIZE;
+  }
+
+  if (
+    typeof incrementalBookmarksPageSize === 'number' &&
+    Number.isFinite(incrementalBookmarksPageSize) &&
+    incrementalBookmarksPageSize > 0
+  ) {
+    return Math.max(
+      MIN_BOOKMARKS_PAGE_SIZE,
+      Math.min(MAX_BOOKMARKS_PAGE_SIZE, Math.trunc(incrementalBookmarksPageSize)),
+    );
+  }
+
+  if (!Number.isFinite(knownBoundaryThreshold) || knownBoundaryThreshold <= 0) {
+    return DEFAULT_INCREMENTAL_BOOKMARKS_PAGE_SIZE;
+  }
+
+  return Math.max(
+    MIN_BOOKMARKS_PAGE_SIZE,
+    Math.min(MAX_BOOKMARKS_PAGE_SIZE, Math.trunc(knownBoundaryThreshold)),
+  );
 }
 
 export interface QuoteRef {

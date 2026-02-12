@@ -14,6 +14,7 @@ export interface SyncConfig {
   default_incremental_max_new: MaxNewSetting;
   quote_resolve_max_depth: number;
   known_boundary_threshold: number;
+  incremental_bookmarks_page_size: number | null;
 }
 
 export interface CostConfig {

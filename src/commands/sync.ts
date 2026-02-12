@@ -25,7 +25,11 @@ import { logInfo, logWarn } from '../utils/logger.ts';
 import { isSkippableMediaDownloadError } from '../utils/media-download.ts';
 import { ensureAppDirs, resolveConfigPaths } from '../utils/paths.ts';
 import { nowIso, utcBilledDay } from '../utils/time.ts';
-import { applyBookmarkObservation, resolveRequestedMaxNew } from './sync-logic.ts';
+import {
+  applyBookmarkObservation,
+  resolveBookmarksPageSize,
+  resolveRequestedMaxNew,
+} from './sync-logic.ts';
 
 interface SyncCommandOptions {
   maxNewRaw?: string;
@@ -376,6 +380,11 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
     const userId = me.data.id;
 
     const knownThreshold = appConfig.sync.known_boundary_threshold;
+    const bookmarkPageSize = resolveBookmarksPageSize(
+      mode,
+      knownThreshold,
+      appConfig.sync.incremental_bookmarks_page_size,
+    );
     const maxDepth = Math.min(3, Math.max(1, appConfig.sync.quote_resolve_max_depth));
     const onMediaDownloadSkipped = (params: {
       mediaKey: string;
@@ -392,93 +401,98 @@ export async function runSyncCommand(options: SyncCommandOptions): Promise<void>
     let shouldStop = false;
 
     rawApiRequestCount += 1; // getMe() request
-    await fetchBookmarkPages(client, userId, async (page: XBookmarksResponse) => {
-      if (shouldStop) {
-        return false;
-      }
-      rawApiRequestCount += 1;
+    await fetchBookmarkPages(
+      client,
+      userId,
+      async (page: XBookmarksResponse) => {
+        if (shouldStop) {
+          return false;
+        }
+        rawApiRequestCount += 1;
 
-      const now = nowIso();
-      const rootPosts = page.data ?? [];
-      const includePosts = page.includes?.tweets ?? [];
-      const allPosts = dedupePosts([...rootPosts, ...includePosts]);
-      const users = uniqueUsers(page.includes?.users ?? []);
-      const mediaItems = page.includes?.media ?? [];
-      const processedRootPosts: XPostEntity[] = [];
+        const now = nowIso();
+        const rootPosts = page.data ?? [];
+        const includePosts = page.includes?.tweets ?? [];
+        const allPosts = dedupePosts([...rootPosts, ...includePosts]);
+        const users = uniqueUsers(page.includes?.users ?? []);
+        const mediaItems = page.includes?.media ?? [];
+        const processedRootPosts: XPostEntity[] = [];
 
-      withTransaction(db, () => {
-        upsertUsers(db, users, now);
-        upsertPosts(db, allPosts, now);
+        withTransaction(db, () => {
+          upsertUsers(db, users, now);
+          upsertPosts(db, allPosts, now);
+
+          if (options.media) {
+            counters.newMediaCount += upsertMedia(db, mediaItems, now, paths.mediaRoot);
+            attachPostMedia(db, allPosts);
+          }
+
+          for (const post of rootPosts) {
+            const status = observeBookmark(db, post.id, now);
+            processedRootPosts.push(post);
+
+            const boundary = applyBookmarkObservation(
+              {
+                mode,
+                knownBoundaryThreshold: knownThreshold,
+                requestedMaxNew: maxNew.requestedMaxNew,
+                knownStreak,
+                newBookmarksCount: counters.newBookmarksCount,
+              },
+              status,
+            );
+            knownStreak = boundary.state.knownStreak;
+            counters.newBookmarksCount = boundary.state.newBookmarksCount;
+            if (boundary.stop) {
+              shouldStop = true;
+              break;
+            }
+          }
+        });
 
         if (options.media) {
-          counters.newMediaCount += upsertMedia(db, mediaItems, now, paths.mediaRoot);
-          attachPostMedia(db, allPosts);
-        }
-
-        for (const post of rootPosts) {
-          const status = observeBookmark(db, post.id, now);
-          processedRootPosts.push(post);
-
-          const boundary = applyBookmarkObservation(
-            {
-              mode,
-              knownBoundaryThreshold: knownThreshold,
-              requestedMaxNew: maxNew.requestedMaxNew,
-              knownStreak,
-              newBookmarksCount: counters.newBookmarksCount,
-            },
-            status,
+          await saveMediaIfNeeded(
+            db,
+            client,
+            paths.mediaRoot,
+            mediaItems,
+            onMediaDownloadSkipped,
           );
-          knownStreak = boundary.state.knownStreak;
-          counters.newBookmarksCount = boundary.state.newBookmarksCount;
-          if (boundary.stop) {
-            shouldStop = true;
-            break;
-          }
         }
-      });
 
-      if (options.media) {
-        await saveMediaIfNeeded(
+        await resolveQuoteReferences({
           db,
           client,
-          paths.mediaRoot,
-          mediaItems,
+          rootPosts: processedRootPosts,
+          appConfig,
+          maxDepth,
+          syncRunId,
+          counters,
+          mediaEnabled: options.media,
+          mediaRoot: paths.mediaRoot,
+          onApiRequest: () => {
+            rawApiRequestCount += 1;
+          },
           onMediaDownloadSkipped,
-        );
-      }
+        });
 
-      await resolveQuoteReferences({
-        db,
-        client,
-        rootPosts: processedRootPosts,
-        appConfig,
-        maxDepth,
-        syncRunId,
-        counters,
-        mediaEnabled: options.media,
-        mediaRoot: paths.mediaRoot,
-        onApiRequest: () => {
-          rawApiRequestCount += 1;
-        },
-        onMediaDownloadSkipped,
-      });
+        trackApiReads({
+          db,
+          syncRunId,
+          endpoint: '/2/users/:id/bookmarks',
+          postIds: allPosts.map((post) => post.id),
+          userIds: users.map((user) => user.id),
+          appConfig,
+        });
+        counters.apiPostsReadCount += new Set(allPosts.map((post) => post.id)).size;
+        counters.apiUsersReadCount += new Set(users.map((user) => user.id)).size;
 
-      trackApiReads({
-        db,
-        syncRunId,
-        endpoint: '/2/users/:id/bookmarks',
-        postIds: allPosts.map((post) => post.id),
-        userIds: users.map((user) => user.id),
-        appConfig,
-      });
-      counters.apiPostsReadCount += new Set(allPosts.map((post) => post.id)).size;
-      counters.apiUsersReadCount += new Set(users.map((user) => user.id)).size;
+        updateSyncRunCounters(db, syncRunId, counters);
 
-      updateSyncRunCounters(db, syncRunId, counters);
-
-      return !shouldStop;
-    });
+        return !shouldStop;
+      },
+      { maxResults: bookmarkPageSize },
+    );
 
     const runCost = estimateRunCost(db, syncRunId);
     completeSyncRun(db, syncRunId, nowIso(), runCost);

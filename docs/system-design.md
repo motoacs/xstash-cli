@@ -79,6 +79,7 @@
 - 誤り: 「`posts` に既存なら停止」
 - 修正: 「`bookmarks` に既存でも継続し、連続 `N` 件既知で停止」
 - 既定値: `known_boundary_threshold = 5`
+- 取得ページサイズは別設定 `incremental_bookmarks_page_size`（任意）で上書き可能
 - 適用範囲: この停止条件は `mode=incremental` のときのみ適用する。`mode=initial` では適用しない。
 
 これにより、引用解決で先行保存された投稿（`bookmarked` ではない）誤判定に加え、
@@ -338,6 +339,10 @@ FROM (
 2. 取得モード判定（初回 or 増分）
 3. `max-new` と `known_boundary_threshold` を確定
 4. `GET /2/users/:id/bookmarks` をページング
+   - `mode=initial`: `max_results=100`
+   - `mode=incremental`:
+     - `sync.incremental_bookmarks_page_size` が設定されていれば `max_results = clamp(incremental_bookmarks_page_size, 5, 100)`
+     - 未設定なら `max_results = clamp(known_boundary_threshold, 5, 100)`（`known_boundary_threshold <= 0` は `5` 扱い）
 5. 各投稿を新しい順に処理
    - `bookmarks` に既存:
      - `bookmarks.last_synced_at` を更新
@@ -406,7 +411,8 @@ FROM (
     "default_initial_max_new": 200,
     "default_incremental_max_new": "all",
     "quote_resolve_max_depth": 3,
-    "known_boundary_threshold": 5
+    "known_boundary_threshold": 5,
+    "incremental_bookmarks_page_size": null
   },
   "cost": {
     "unit_price_post_read_usd": 0.005,
